@@ -38,7 +38,7 @@ public class ArticleTitleBracketFix {
 				"      FILTER(lang(?paperLabel)=\"en\")\n" + 
 				"      FILTER(STRSTARTS(?paperLabel, \"[\")).\n" + 
 				"      FILTER(STRENDS(?paperLabel, \"]\")).\n" + 
-				" } LIMIT 10\n" + 
+				" } LIMIT 30\n" + 
 				"\n" + 
 				"");
 		
@@ -62,11 +62,11 @@ public class ArticleTitleBracketFix {
 					newLabels.add(newLabel);
 					System.out.println(newLabel);
 				}
-				editor.updateTermsStatements(doc, newLabels,
-						Collections.emptyList(), Collections.emptyList(),
-						Collections.emptyList(), Collections.emptyList(),
-						Collections.emptyList(), "fixing brackets in labels");
 			}
+			editor.updateTermsStatements(doc, newLabels,
+					Collections.emptyList(), Collections.emptyList(),
+					Collections.emptyList(), Collections.emptyList(),
+					Collections.emptyList(), "fixing brackets in labels");
 		}
 	}
 }
