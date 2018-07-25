@@ -2,7 +2,14 @@ This is a quick hack to create properties based on the content of their proposal
 
 This ugly piece of software is published in the hope that it will encourage others to write something cleaner.
 
-To use it, just type `./launch.sh "name of the property proposal"` (where the name of the property proposal is "My ID" if the property is proposed at "Wikidata:Property proposal/My ID").
+To use it, just type `./launch.sh "name of the property proposal"` (where the name of the property proposal is "My ID" if the property is proposed at "Wikidata:Property proposal/My ID"). This will:
+* Parse the proposal template
+* Perform some checks on the proposal (for instance, for an identifier, it checks that the examples provided match the regular expression)
+* Create the property, adding some default property constraints in the case of identifiers.
+* Add examples on the property (and on the items mentioned in the examples)
+* Add "see also" links in both directions
+* Create a talk page for the property
+* Close the property proposal.
 
 Installing this script is complicated because it depends on Jython, a Java implementation of Python.
 Using Jython makes it possible to use Wikidata-Toolkit, which is included in the java_libs folder.
