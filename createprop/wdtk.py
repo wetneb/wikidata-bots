@@ -101,6 +101,7 @@ class ProposalReader(object):
         self.formatter_url = None
         self.examples = []
         self.see_also = []
+        self.country = None
         self.page_name = None
         self.topic = None
         self.source = None
@@ -117,7 +118,7 @@ class ProposalReader(object):
         if self.datatype == 'external-id':
             if not self.examples:
                 print('\n\nNO EXAMPLE PROVIDED!!!!!\n\n')
-                raise ValueError('No example provided')
+                raw_input('continue_anyway')
             fmt = self.allowed_values
             if not fmt or fmt.lower() == 'string':
                 self.allowed_values = None
@@ -158,10 +159,12 @@ class ProposalReader(object):
         current_references = [reference]
 
         for lang, val in self.latest_labels.items():
-            labels.append(Datamodel.makeMonolingualTextValue(val, lang))
+            if valid_lang_code(lang):
+                labels.append(Datamodel.makeMonolingualTextValue(val, lang))
 
         for lang, val in self.descriptions.items():
-            descriptions.append(Datamodel.makeMonolingualTextValue(val, lang))
+            if valid_lang_code(lang):
+                descriptions.append(Datamodel.makeMonolingualTextValue(val, lang))
 
         # Type
         if self.datatype == 'external-id' and self.domain == 'Q5':
@@ -194,6 +197,10 @@ class ProposalReader(object):
         # Formatter URL
         if self.formatter_url:
             statements.append(mks_str(npid, 'P1630', self.formatter_url))
+
+        # Country
+        if self.country:
+            statements.append(mks_item(npid, 'P17', self.country)
 
         # Constraints
         if self.datatype == 'external-id':
@@ -379,6 +386,8 @@ class ProposalReader(object):
                 self.see_also = [pid for pid in pids if pid and pid.startswith('P')]
                 print('SEE ALSO')
                 print(self.see_also)
+            elif key == 'country':
+                self.country = self.parse_entity_id(value)
             elif key == 'formatter URL':
                 self.formatter_url = value
                 print('FORMATTER: {}'.format(value))
@@ -584,6 +593,29 @@ def edit_wiki_page(page_name, content, summary=None, bot=False):
     requests_cookies = r.cookies
     print(r.json())
     r.raise_for_status()
+
+def valid_lang_code(code):
+    valid_codes =  [
+      'aa', 'ab', 'abs', 'ace', 'ady', 'ady-cyrl', 'aeb', 'aeb-arab', 'aeb-latn', 'af', 'ak', 'aln', 'als', 'am', 'an', 'ang', 'anp', 'ar', 'arc', 'arn', 'arq', 'ary', 'arz', 'as', 'ase', 'ast', 'atj', 'av', 'avk', 'awa', 'ay', 'az', 'azb', 'ba', 'ban',
+'bar', 'bat-smg', 'bbc', 'bbc-latn', 'bcc', 'bcl', 'be', 'be-tarask', 'be-x-old', 'bg', 'bgn', 'bh',
+'bho', 'bi', 'bjn', 'bm', 'bn', 'bo', 'bpy', 'bqi', 'br', 'brh', 'bs', 'btm', 'bto', 'bug', 'bxr', 'ca', 'cbk-zam', 'cdo', 'ce', 'ceb', 'ch', 'cho', 'chr', 'chy', 'ckb', 'co', 'cps', 'cr', 'crh', 'crh-cyrl', 'crh-latn', 'cs', 'csb', 'cu', 'cv', 'cy', 'da',
+'de', 'de-at', 'de-ch', 'de-formal', 'din', 'diq', 'dsb', 'dtp', 'dty', 'dv', 'dz', 'ee', 'egl',
+'el', 'eml', 'en', 'en-ca', 'en-gb', 'eo', 'es', 'es-419', 'es-formal', 'et', 'eu', 'ext', 'fa', 'ff', 'fi', 'fit', 'fiu-vro', 'fj', 'fo', 'fr', 'frc', 'frp', 'frr', 'fur', 'fy', 'ga', 'gag', 'gan', 'gan-hans', 'gan-hant', 'gcr', 'gd', 'gl', 'glk', 'gn',
+'gom', 'gom-deva', 'gom-latn', 'gor', 'got', 'grc', 'gsw', 'gu', 'gv', 'ha', 'hak', 'haw', 'he',
+'hi', 'hif', 'hif-latn', 'hil', 'ho', 'hr', 'hrx', 'hsb', 'ht', 'hu', 'hu-formal', 'hy', 'hz', 'ia', 'id', 'ie', 'ig', 'ii', 'ik', 'ike-cans', 'ike-latn', 'ilo', 'inh', 'io', 'is', 'it', 'iu', 'ja', 'jam', 'jbo', 'jut', 'jv', 'ka', 'kaa', 'kab', 'kbd',
+'kbd-cyrl', 'kbp', 'kea', 'kg', 'khw', 'ki', 'kiu', 'kj', 'kk', 'kk-arab', 'kk-cn', 'kk-cyrl',
+'kk-kz', 'kk-latn', 'kk-tr', 'kl', 'km', 'kn', 'ko', 'ko-kp', 'koi', 'kr', 'krc', 'kri', 'krj', 'krl', 'ks', 'ks-arab', 'ks-deva', 'ksh', 'ku', 'ku-arab', 'ku-latn', 'kum', 'kv', 'kw', 'ky', 'la', 'lad', 'lb', 'lbe', 'lez', 'lfn', 'lg', 'li', 'lij', 'liv',
+'lki', 'lmo', 'ln', 'lo', 'loz', 'lrc', 'lt', 'ltg', 'lus', 'luz', 'lv', 'lzh', 'lzz', 'mai',
+'map-bms', 'mdf', 'mg', 'mh', 'mhr', 'mi', 'min', 'mk', 'ml', 'mn', 'mni', 'mo', 'mr', 'mrj', 'ms', 'mt', 'mus', 'mwl', 'my', 'myv', 'mzn', 'na', 'nah', 'nan', 'nap', 'nb', 'nds', 'nds-nl', 'ne', 'new', 'ng', 'niu', 'nl', 'nl-informal', 'nn', 'no', 'nod',
+'nov', 'nrm', 'nso', 'nv', 'ny', 'nys', 'oc', 'olo', 'om', 'or', 'os', 'ota', 'pa', 'pag', 'pam', 'pap',
+'pcd', 'pdc', 'pdt', 'pfl', 'pi', 'pih', 'pl', 'pms', 'pnb', 'pnt', 'prg', 'ps', 'pt', 'pt-br', 'qu', 'qug', 'rgn', 'rif', 'rm', 'rmy', 'rn', 'ro', 'roa-rup', 'roa-tara', 'ru', 'rue', 'rup', 'ruq', 'ruq-cyrl', 'ruq-latn', 'rw', 'rwr', 'sa', 'sah', 'sat',
+'sc', 'scn', 'sco', 'sd', 'sdc', 'sdh', 'se', 'sei', 'ses', 'sg', 'sgs', 'sh', 'shi', 'shi-latn',
+'shi-tfng', 'shn', 'shy-latn', 'si', 'simple', 'sje', 'sk', 'skr', 'skr-arab', 'sl', 'sli', 'sm', 'sma', 'smj', 'sn', 'so', 'sq', 'sr', 'sr-ec', 'sr-el', 'srn', 'srq', 'ss', 'st', 'stq', 'sty', 'su', 'sv', 'sw', 'szl', 'ta', 'tay', 'tcy', 'te', 'tet',
+'tg', 'tg-cyrl', 'tg-latn', 'th', 'ti', 'tk', 'tl', 'tly', 'tn', 'to', 'tpi', 'tr', 'tru', 'ts', 'tt',
+'tt-cyrl', 'tt-latn', 'tum', 'tw', 'ty', 'tyv', 'tzm', 'udm', 'ug', 'ug-arab', 'ug-latn', 'uk', 'ur', 'uz', 'uz-cyrl', 'uz-latn', 've', 'vec', 'vep', 'vi', 'vls', 'vmf', 'vo', 'vot', 'vro', 'wa', 'war', 'wo', 'wuu', 'xal', 'xh', 'xmf', 'yi', 'yo', 'yue',
+'za', 'zea', 'zgh', 'zh', 'zh-classical', 'zh-cn', 'zh-hans', 'zh-hant', 'zh-hk',
+'zh-min-nan', 'zh-mo', 'zh-my', 'zh-sg', 'zh-tw', 'zh-yue', 'zu' ]
+    return code in valid_codes
 
 if __name__ == '__main__':
     import sys
