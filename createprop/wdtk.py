@@ -9,6 +9,7 @@ from org.wikidata.wdtk.wikibaseapi import LoginFailedException
 from org.wikidata.wdtk.wikibaseapi import WikibaseDataEditor
 from org.wikidata.wdtk.wikibaseapi import WikibaseDataFetcher
 from org.wikidata.wdtk.datamodel.json.jackson import JacksonDatatypeId
+from java.lang import NumberFormatException
 from java.math import BigDecimal
 
 username = open('wikidata_username.txt', 'r').read().strip()
@@ -97,6 +98,7 @@ class ProposalReader(object):
         self.latest_labels = {}
         self.descriptions = {}
         self.allowed_values = None
+        self.allowed_units = None
         self.domain = None
         self.formatter_url = None
         self.examples = []
@@ -111,6 +113,7 @@ class ProposalReader(object):
         self.orig_wikicode = None
         self.orig_template = None
         self.number_of_ids = None
+        self.mixnmatch = None
 
     def check_proposal(self):
         if self.status != 'ready':
@@ -187,7 +190,8 @@ class ProposalReader(object):
 
         # Source website
         if self.source:
-            statements.append(mks_str(npid, 'P1896', self.source))
+            for url in self.source.split(', '):
+                statements.append(mks_str(npid, 'P1896', url))
 
         # Proposal discussion
         statements.append(mks_str(npid, 'P3254', 'https://www.wikidata.org/wiki/{}{}'.format(
@@ -200,7 +204,11 @@ class ProposalReader(object):
 
         # Country
         if self.country:
-            statements.append(mks_item(npid, 'P17', self.country)
+            statements.append(mks_item(npid, 'P17', self.country))
+
+        # Mix'n'match
+        if self.mixnmatch:
+            statements.append(mks_str(npid, 'P2264', self.mixnmatch))
 
         # Constraints
         if self.datatype == 'external-id':
@@ -220,6 +228,14 @@ class ProposalReader(object):
                 ]))
         elif self.datatype == 'number':
             statements.append(mks_item(npid, 'P2302', 'Q52848401'))
+
+        # Allowed units
+        if self.datatype == 'quantity' or self.datatype == 'number' and self.allowed_units:
+            print('ALLOWED UNITS')
+            print(self.allowed_units)
+            statements.append(mks_item(npid, 'P2302', 'Q21514353', [
+                    snak_item('P2305', unit)
+                    for unit in self.allowed_units]))
 
         # See also
         for see_also_pid in self.see_also or []:
@@ -373,6 +389,10 @@ class ProposalReader(object):
                     value = '[1-9]\d*'
                 self.allowed_values = self.parse_entity_id(value) or value
                 print('ALLOWED: {}'.format(self.allowed_values))
+            elif key == 'allowed units':
+                lst = set(value.split(',') + value.split('*'))
+                qids = map(self.parse_entity_id, lst)
+                self.allowed_units = [qid for qid in qids if qid and qid.startswith('Q')]
             elif key == 'example':
                 raw_examples = unicode(value).split('*')
                 self.examples = []
@@ -402,6 +422,8 @@ class ProposalReader(object):
                 self.completeness = self.parse_entity_id(value)
             elif key == 'number of ids':
                 self.number_of_ids = self.parse_number_of_ids(unicode(value))
+            elif key == "mix'n'match":
+                self.mixnmatch = unicode(value)
             else:
                 print('Ignoring key: '+key)
 
@@ -419,12 +441,36 @@ class ProposalReader(object):
             target = self.parse_example_target(parts[1])
             if not subject_qid or not target:
                 return
+            print(target)
             self.examples.append((subject_qid,target))
 
     def parse_example_target(self, target):
         parsed = self.parse_entity_id(target)
         if parsed:
             return Datamodel.makeWikidataItemIdValue(parsed)
+        r = re.compile('[± ]+')
+
+        if self.datatype == 'quantity' or self.datatype == 'number':
+            try:
+                parts = [p.strip() for p in r.split(target) if p.strip()]
+                print(parts)
+                amount = BigDecimal(parts[0])
+                precision = 0
+                unit = ""
+                if len(parts) > 1:
+                    unit_qid = self.parse_entity_id(parts[-1])
+                    if unit_qid:
+                        unit = Datamodel.makeWikidataItemIdValue(unit_qid).getIri()
+                    try:
+                        precision = BigDecimal(parts[1])
+                    except NumberFormatException:
+                        pass
+                if precision:
+                    return Datamodel.makeQuantityValue(amount, amount-precision, amount+precision, unit)
+                else:
+                    return Datamodel.makeQuantityValue(amount, unit)
+            except NumberFormatException as e:
+                print(e)
 
         if target.strip().startswith('['):
             wiki = mwparserfromhell.parse(target)
