@@ -116,7 +116,7 @@ class ProposalReader(object):
         self.mixnmatch = None
 
     def check_proposal(self):
-        if self.status != 'ready':
+        if not self.status.startswith('ready'):
             raise ValueError('Proposal is not ready!')
         if self.datatype == 'external-id':
             if not self.examples:
@@ -230,7 +230,7 @@ class ProposalReader(object):
             statements.append(mks_item(npid, 'P2302', 'Q52848401'))
 
         # Allowed units
-        if self.datatype == 'quantity' or self.datatype == 'number' and self.allowed_units:
+        if (self.datatype == 'quantity' or self.datatype == 'number') and self.allowed_units:
             print('ALLOWED UNITS')
             print(self.allowed_units)
             statements.append(mks_item(npid, 'P2302', 'Q21514353', [
@@ -305,7 +305,7 @@ class ProposalReader(object):
                 subject_qid, pid.getId(), target))
 
         for subject, statements in statements.items():
-            editor.updateStatements(subject, statements, [], 'create property')
+            editor.updateStatements(subject, statements, [], 'create property [[Property:'+pid.getId()+'|'+pid.getId()+']]')
 
     def to_template_doc(self):
         doc = """Property documentation
@@ -321,7 +321,7 @@ class ProposalReader(object):
 
     def to_notification(self, pid):
         ping = self.generate_ping(self.users) + " {{done}}: {{P|"+pid+"}}. − ~~~~"
-        return ping
+        return '\n'+ping
 
     def parse_proposal_page(self, page_name):
         """
@@ -374,7 +374,7 @@ class ProposalReader(object):
                 self.status = value
                 print('STATUS: {}'.format(value))
             elif key == 'datatype':
-                if value.lower() == 'external identifier' or value.lower() == 'external id':
+                if value.lower() in ['external identifier', 'external id', 'id']:
                     value = 'external-id'
                 self.datatype = value.lower()
                 print('DATATYPE: {}'.format(value))
@@ -454,6 +454,8 @@ class ProposalReader(object):
             try:
                 parts = [p.strip() for p in r.split(target) if p.strip()]
                 print(parts)
+                if parts[-1].startswith('[') and parts[-1].endswith(']'):
+                    parts = parts[:-1]
                 amount = BigDecimal(parts[0])
                 precision = 0
                 unit = ""
@@ -466,20 +468,23 @@ class ProposalReader(object):
                     except NumberFormatException:
                         pass
                 if precision:
-                    return Datamodel.makeQuantityValue(amount, amount-precision, amount+precision, unit)
+                    return Datamodel.makeQuantityValue(amount, amount.subtract(precision), amount.add(precision), unit)
                 else:
                     return Datamodel.makeQuantityValue(amount, unit)
             except NumberFormatException as e:
                 print(e)
 
-        if target.strip().startswith('['):
+        target = target.strip()
+        if target.startswith('<code>') and target.endswith('</code>'):
+            target = target[len('<code>'):-len('</code>')]
+
+        if target.startswith('['):
             wiki = mwparserfromhell.parse(target)
             for extlink in wiki.filter_external_links():
                 return Datamodel.makeStringValue(unicode(extlink.title))
 
-        cleantarget = target.strip()
-        if cleantarget.startswith('"') and cleantarget.endswith('"'):
-            return Datamodel.makeStringValue(cleantarget[1:-1])
+        if target.startswith('"') and target.endswith('"'):
+            return Datamodel.makeStringValue(target[1:-1])
         elif self.datatype == 'string' or self.datatype == 'external-id':
             return Datamodel.makeStringValue(target.strip())
 
