@@ -28,6 +28,7 @@ import re
 from datetime import datetime
 from collections import defaultdict
 from time import sleep
+from urlparse import urlparse
 from unidecode import unidecode
 
 requests_session = requests.Session()
@@ -50,6 +51,12 @@ def to_qid(s):
     if m:
         return m.group
 
+def mk_ref(url):
+    ref_pid = Datamodel.makeWikidataPropertyIdValue('P854')
+    ref_url = Datamodel.makeStringValue(url)
+    ref_snak = Datamodel.makeValueSnak(ref_pid, ref_url)
+    return Datamodel.makeReference([Datamodel.makeSnakGroup([ref_snak])])
+
 def mks_str(subject, prop_id, s):
     value = Datamodel.makeStringValue(s)
     return mks(subject, prop_id, value)
@@ -62,13 +69,16 @@ def mks_prop(subject, prop_id, pid):
     value = Datamodel.makeWikidataPropertyIdValue(pid)
     return mks(subject, prop_id, value)
 
-def mks(subject, prop_id, value, qualifiers=[]):
+def mks(subject, prop_id, value, qualifiers=[], reference=None):
     pid = Datamodel.makeWikidataPropertyIdValue(prop_id)
     claim = Datamodel.makeClaim(
         subject,
         Datamodel.makeValueSnak(
             pid, value),
         qualifiers)
+    references = list(current_references)
+    if reference:
+        references.append(mk_ref(reference))
     return Datamodel.makeStatement(claim, current_references, StatementRank.NORMAL, "")
 
 def snak(prop_id, val):
@@ -133,10 +143,11 @@ class ProposalReader(object):
                     fmt = fmt[len('<code>'):-len('</code>')]
                 if fmt.startswith('<nowiki>') and fmt.endswith('</nowiki>'):
                     fmt = fmt[len('<nowiki>'):-len('</nowiki>')]
+                fmt = fmt.replace('{{!}}', '|')
                 self.allowed_values = fmt
                 print('REGEX: '+fmt)
                 r = re.compile(fmt)
-                for subject, target in self.examples:
+                for subject, target, ref in self.examples:
                     m = r.match(target.getString())
                     if not m:
                         raise ValueError('Example value {} does not match format'.format(target))
@@ -265,6 +276,8 @@ class ProposalReader(object):
             self.datatype = 'wikibase-item'
         if self.datatype == 'number':
             self.datatype = 'quantity'
+        if self.datatype == 'monolingual text' or self.datatype == 'monolingual string':
+            self.datatype = 'monolingualtext'
         translated_datatype = JacksonDatatypeId.getDatatypeIriFromJsonDatatype(self.datatype)
         print(self.datatype)
         datatype_value = Datamodel.makeDatatypeIdValue(translated_datatype)
@@ -297,15 +310,15 @@ class ProposalReader(object):
             )
 
         # Examples
-        for subject, target in self.examples or []:
+        for subject, target, ref in self.examples or []:
             statements[pid].append(mks_item(pid, 'P1855', subject, [
                 snak(pid.getId(), target) ]))
             subject_qid = Datamodel.makeWikidataItemIdValue(subject)
             statements[subject_qid].append(mks(
-                subject_qid, pid.getId(), target))
+                subject_qid, pid.getId(), target, reference=ref))
 
         for subject, statements in statements.items():
-            editor.updateStatements(subject, statements, [], 'create property [[Property:'+pid.getId()+'|'+pid.getId()+']]')
+            editor.updateStatements(subject, statements, [], 'create property [[Property:'+pid.getId()+']]')
 
     def to_template_doc(self):
         doc = """Property documentation
@@ -349,7 +362,12 @@ class ProposalReader(object):
         for param in self.orig_template.params:
             if param.name.strip() == 'status':
                 param.value = ' '+pid[1:]+'\n'
-        new_text = unicode(self.orig_wikicode)+'\n'+self.to_notification(pid)
+        new_text = unicode(self.orig_wikicode)
+
+        # if no other ready proposal is in this page
+        r = re.compile('.*\| *status[ \t]*= *ready')
+        if not r.match(new_text) and '{{done}}' not in new_text:
+            new_text += '\n'+self.to_notification(pid)
 
         edit_wiki_page('Property talk:'+pid, self.to_template_doc(), 'create')
 
@@ -434,15 +452,22 @@ class ProposalReader(object):
             parts = example.split(UNICODE_ARROW)
         else:
             parts = example.split('->')
-        print('Example parts')
-        print(parts)
         if len(parts) == 2:
             subject_qid = self.parse_entity_id(parts[0])
-            target = self.parse_example_target(parts[1])
+            ref = None
+            target_string = parts[1]
+            if '<ref>' in target_string and '</ref>' in target_string:
+                target_parts = target_string.split('<ref>')
+                url_candidate = target_parts[1].split('</ref>')[0].strip()
+                url_parts = urlparse(url_candidate)
+                if url_parts.scheme:
+                    ref = url_candidate
+                target_string = target_parts[0]
+            target = self.parse_example_target(target_string)
             if not subject_qid or not target:
                 return
             print(target)
-            self.examples.append((subject_qid,target))
+            self.examples.append((subject_qid,target,ref))
 
     def parse_example_target(self, target):
         parsed = self.parse_entity_id(target)
@@ -451,6 +476,10 @@ class ProposalReader(object):
         r = re.compile('[± ]+')
 
         if self.datatype == 'quantity' or self.datatype == 'number':
+            # First remove any spurious spaces or commas
+            spurious_space_comma_re = re.compile('[ ,](\d\d\d)')
+            target = spurious_space_comma_re.sub(r'\1', target)
+
             try:
                 parts = [p.strip() for p in r.split(target) if p.strip()]
                 print(parts)
@@ -481,9 +510,9 @@ class ProposalReader(object):
         if target.startswith('['):
             wiki = mwparserfromhell.parse(target)
             for extlink in wiki.filter_external_links():
-                return Datamodel.makeStringValue(unicode(extlink.title))
+                return Datamodel.makeStringValue(unicode(extlink.title.strip()))
 
-        if target.startswith('"') and target.endswith('"'):
+        if target.startswith('"') and target.endswith('"') and self.datatype == 'string':
             return Datamodel.makeStringValue(target[1:-1])
         elif self.datatype == 'string' or self.datatype == 'external-id':
             return Datamodel.makeStringValue(target.strip())
