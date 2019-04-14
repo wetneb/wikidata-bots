@@ -2,6 +2,8 @@ This is a quick hack to create properties based on the content of their proposal
 
 This ugly piece of software is published in the hope that it will encourage others to write something cleaner.
 
+*Note that this script can fail in arbitrarily bad ways, such as creating properties without closing the corresponding proposals, or doing all sorts of bad things. USE AT YOUR OWN RISK.*
+
 To use it, just type `./launch.sh "name of the property proposal"` (where the name of the property proposal is "My ID" if the property is proposed at "Wikidata:Property proposal/My ID"). This will:
 * Parse the proposal template
 * Perform some checks on the proposal (for instance, for an identifier, it checks that the examples provided match the regular expression)
@@ -21,5 +23,4 @@ So, to run it:
 - write your username and password in `wikidata_username.txt` and `wikidata_password.txt` - your account should have property creation rights
 - create properties!
 
-Note that this script can fail in arbitrarily bad ways, such as creating properties without closing the corresponding proposals, or doing all sorts of bad things. USE AT YOUR OWN RISK.
 
